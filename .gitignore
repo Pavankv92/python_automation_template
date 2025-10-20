@@ -1,0 +1,15 @@
+
+venv/
+data/
+
+.DS_Store
+/.vscode
+*.txt
+*.json
+
+
+
+*
+*__pycache__/
+*.pytest_cache/
+*.log
