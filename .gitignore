@@ -8,8 +8,6 @@ data/
 *.json
 
 
-
-*
 *__pycache__/
 *.pytest_cache/
 *.log
