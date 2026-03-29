@@ -1,39 +1,77 @@
 from __future__ import annotations
+
 import tkinter as tk
-from tkinter import ttk
 from queue import Queue
-from . import widgets as w
+from tkinter import ttk, messagebox
+from typing import TYPE_CHECKING
+from ..constants import FieldTypes as FT
 
+from python_automation_template.views import widgets as w
+from python_automation_template.logging_config import logger
+from python_automation_template.models.models import SettingsModel
+from python_automation_template.utils import (
+    SerialInterface,
+    TicketHandler,
+    TicketPurpose,
+)
 
-from .utils import SerialInterface, TicketPurpose, TicketHandler
-from .models import SettingsModel
-from .logging_config import logger
+if TYPE_CHECKING:
+    from python_automation_template.utils import Ticket
 
 
 class PageFileds:
-    fields = {"com_port": {"type": "str", "value": ""}}
+    fields = {"ip_address": {"type": "str", "value": FT.string}}
 
 
 class InstrumentSettings(SettingsModel):
-    def __init__(self, fields, file_name):
+    def __init__(self, fields, file_name) -> None:
         super().__init__(fields=fields, file_name=file_name)
 
 
 class InstrumentMainPage(w.Frame):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self._message_queue = Queue()
-        self._ticket_handler = TicketHandler(self.message_queue, self)
+        self._message_queue: "Queue[Ticket]" = Queue()
+        self._ticket_handler = TicketHandler(
+            message_queue=self._message_queue, event_widget=self
+        )
+        self.rowconfigure((0), weight=1)
+        self.rowconfigure((1), weight=9)
+        self.rowconfigure((2), weight=1)
+
+        self.columnconfigure(0, weight=1)
+
         self._fields = PageFileds()
         self._settings_file_name = "instruments_settings.json"
         self._settings_model = InstrumentSettings(
             fields=self._fields.fields, file_name=self._settings_file_name
         )
+        self._settings_vars = {"ip_address": tk.StringVar(value="198.162.0.1")}
         self._load_settings()
-        self._settings_vars = {"com_port": tk.StringVar()}
 
         # widgets
-        self._status_var = tk.StringVar()
+        self._status_var = tk.StringVar(value='Enter the ip address and hit connect')
+        self._connection_frame = ttk.LabelFrame(self, text="Connection")
+        self._connection_frame.grid(row=0, column=0, sticky='nsew')
+        self._connection_frame.rowconfigure(0, weight=1)
+        self._connection_frame.columnconfigure(0, weight=1)
+        self._connection_frame.columnconfigure(1, weight=1)
+
+        self._main_frame = ttk.LabelFrame(self, text="Main")
+        self._main_frame.grid(row=1, column=0, sticky='nsew')
+        self._status_frame = ttk.LabelFrame(self, text="Status")
+        self._status_frame.grid(row=2, column=0, sticky='nsew')
+
+        w.LabelInput(
+            self._connection_frame,
+            label_text='Robot IP address',
+            var=self._settings_vars['ip_address'],
+            input_class=w.RequiredEntry,
+        ).grid(row=0, column=0, padx=10)
+        self.connect_button = ttk.Button(self._connection_frame, text="Connect")
+        self.connect_button.grid(row=0, column=1, padx=10)
+        self.status_label = ttk.Label(self._status_frame, textvariable=self._status_var)
+        self.status_label.grid(row=0, column=0, sticky='nsew')
 
         self.bind("<<CheckQueue>>", self._check_queue)
 
@@ -73,7 +111,7 @@ class InstrumentMainPage(w.Frame):
         self._settings_model.save()
 
     def make_read_only(self):
-        for child in self._basic_settings_frame.winfo_children():
+        for child in self._connection_frame.winfo_children():
             if hasattr(child, "input"):
                 if isinstance(child.input, ttk.Button):
                     continue
@@ -94,3 +132,16 @@ class InstrumentMainPage(w.Frame):
                 self._status_var.set((ticket.ticket_value))
             if ticket.ticket_type == TicketPurpose.UPDATE_PROGRESS:
                 self._status_var.set((ticket.ticket_value))
+
+    def _on_connect(self, *_):
+        errors = self._get_errors()
+        if errors:
+            self._status_var.set(
+                "Cannot connect, error in fields: {}".format(', '.join(errors.keys()))
+            )
+            message = "Cannot connect to the robot"
+            detail = "The following fields have errors: \n  * {}".format(
+                '\n  * '.join(errors.keys())
+            )
+            messagebox.showerror(title='Error', message=message, detail=detail)
+            return False

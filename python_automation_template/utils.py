@@ -1,10 +1,11 @@
 import socket
-from serial import Serial
 import time
+from enum import Enum, auto
 from queue import Queue
 
-from enum import auto
-from .logging_config import logger
+from serial import Serial
+
+from python_automation_template.logging_config import logger
 
 
 class SerialInterface:
@@ -46,7 +47,7 @@ class TCPInterface:
     def __init__(self, ip_address, port_num, *args, **kwargs) -> None:
         self.tcp = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
         try:
-            self.tcp.connect(ip_address, port_num)
+            self.tcp.connect((ip_address, port_num))
             time.sleep(1)
             self._flush()
         except socket.error as e:
@@ -92,7 +93,7 @@ class TCPInterface:
             return False
 
 
-class TicketPurpose:
+class TicketPurpose(str, Enum):
     UPDATE_STATUS = auto()
     UPDATE_PROGRESS = auto()
     ERROR_MESSAGE = auto()
@@ -106,26 +107,26 @@ class Ticket:
 
 
 class TicketHandler:
-    def __init__(self, message_queue: Queue, event_widget):
+    def __init__(self, message_queue: Queue, event_widget) -> None:
         self.message_queue = message_queue
         self.event_widget = event_widget
 
-    def update_status(self, message):
-        ticket = Ticket(TicketPurpose.UPDATE_STATUS, message)
-        self.message_queue.put(ticket)
+    def update_status(self, message) -> None:
+        ticket = Ticket(ticket_type=TicketPurpose.UPDATE_STATUS, ticket_value=message)
+        self.message_queue.put(item=ticket)
         self.event_widget.event_generate("<<CheckQueue>>")
 
-    def update_progress(self, message):
-        ticket = Ticket(TicketPurpose.UPDATE_PROGRESS, message)
-        self.message_queue.put(ticket)
+    def update_progress(self, message) -> None:
+        ticket = Ticket(ticket_type=TicketPurpose.UPDATE_PROGRESS, ticket_value=message)
+        self.message_queue.put(item=ticket)
         self.event_widget.event_generate("<<CheckQueue>>")
 
-    def update_error(self, message):
-        ticket = Ticket(TicketPurpose.ERROR_MESSAGE, message)
-        self.message_queue.put(ticket)
+    def update_error(self, message) -> None:
+        ticket = Ticket(ticket_type=TicketPurpose.ERROR_MESSAGE, ticket_value=message)
+        self.message_queue.put(item=ticket)
         self.event_widget.event_generate("<<CheckQueue>>")
 
-    def update_done(self, message):
-        ticket = Ticket(TicketPurpose.ERROR_MESSAGE, message)
-        self.message_queue.put(ticket)
+    def update_done(self, message) -> None:
+        ticket = Ticket(ticket_type=TicketPurpose.ERROR_MESSAGE, ticket_value=message)
+        self.message_queue.put(item=ticket)
         self.event_widget.event_generate("<<CheckQueue>>")
